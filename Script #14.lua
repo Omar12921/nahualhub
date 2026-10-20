@@ -1,4 +1,4 @@
--- NAHUALHUB v2.7 | Vuelo + ESP + Hitbox + Aim + Autoshot + Jugadores (TP) | Halloween | Marco RGB |
+-- NAHUALHUB v2.8 | Vuelo + ESP + Hitbox + Aim + Triggerbot + Jugadores (TP) | Halloween | Marco RGB | Key System (Junkie)
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
@@ -6,6 +6,15 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
+
+-- ========== CONFIGURACIÓN DEL SISTEMA DE KEY (Junkie / jnkie.com) ==========
+-- Copia estos 3 valores de tu dashboard de Junkie:
+local KEY_CFG = {
+    service = "NahualHub",         -- nombre exacto de tu Service
+    identifier = "1223023",   -- tu user ID del dashboard
+    provider = "lootlabs 24h",       -- nombre de tu Provider (ej. "Mixed")
+    carpeta = "NahualHub",          -- carpeta donde se guarda la key (si tu executor soporta writefile)
+}
 
 -- ========== ESTADO ==========
 local vivo = true
@@ -117,7 +126,7 @@ local function new(clase, props, hijos)
     return o
 end
 
--- corner = esquina plana (máx. 8) | bubble = burbuja real (solo botones de la izquierda)
+-- corner = esquina plana (máx. 8) | bubble = burbuja real (botones de la izquierda)
 local function corner(r) return new("UICorner", {CornerRadius = UDim.new(0, math.min(r, 8))}) end
 local function bubble(r) return new("UICorner", {CornerRadius = UDim.new(0, r)}) end
 local function redondo() return new("UICorner", {CornerRadius = UDim.new(1, 0)}) end
@@ -144,6 +153,21 @@ local function grad(parent, k1, k2, rot, k3)
         else
             g.Color = ColorSequence.new(T[k1], T[k2])
         end
+    end)
+    g.Parent = parent
+    return g
+end
+
+-- Degradado accent -> accent2 -> accent que sigue al tema
+local function gradTema(parent, rot)
+    local g = Instance.new("UIGradient")
+    g.Rotation = rot or 0
+    onTema(function()
+        g.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, T.accent),
+            ColorSequenceKeypoint.new(0.5, T.accent2),
+            ColorSequenceKeypoint.new(1, T.accent),
+        })
     end)
     g.Parent = parent
     return g
@@ -251,7 +275,7 @@ end
 
 -- ========== GUI BASE ==========
 local guiParent = (gethui and gethui()) or CoreGui
-for _, n in ipairs({"NahualHub", "NahualIntro", "NahualAimFOV", "NahualESP"}) do
+for _, n in ipairs({"NahualHub", "NahualIntro", "NahualAimFOV", "NahualESP", "NahualKey"}) do
     if guiParent:FindFirstChild(n) then guiParent[n]:Destroy() end
 end
 if CoreGui:FindFirstChild("NahualFlyGUI") then CoreGui.NahualFlyGUI:Destroy() end
@@ -280,24 +304,17 @@ local Trad = {
     ["Objetivo"]="Target", ["Parte objetivo"]="Target part", ["A qué parte del cuerpo apunta."]="Which body part it aims at.",
     ["Cabeza"]="Head", ["Cuerpo"]="Body", ["Radio del FOV"]="FOV radius",
     ["Suavidad (más alto = más lento)"]="Smoothness (higher = slower)", ["Filtros"]="Filters",
-    ["Rango máximo (studs)"]="Max range (studs)", ["Rango máximo"]="Max range",
+    ["Rango máximo (studs)"]="Max range (studs)",
     ["Mostrar círculo FOV"]="Show FOV circle", ["Dibuja el área donde el aim busca objetivos."]="Draws the area where aim looks for targets.",
     ["No apunta a jugadores de tu equipo."]="Doesn't aim at your teammates.",
     ["No apuntar tras paredes"]="Don't aim through walls", ["Solo apunta a jugadores que puedes ver."]="Only aims at players you can see.",
     ["El círculo se pone verde cuando hay un objetivo fijado. En modo Mouse usa Clic izq., Shift o Siempre: con clic derecho Roblox bloquea el cursor. Mover el cursor requiere que tu executor tenga mousemoverel."]="The circle turns green when a target is locked. In Mouse mode use L. click, Shift or Always: Roblox locks the cursor with right click. Moving the cursor requires your executor to have mousemoverel.",
-    ["Dispara solo al detectar un enemigo. No mueve el mouse ni la cámara."]="Fires only when an enemy is detected. Doesn't move the mouse or camera.",
-    ["Radio de detección"]="Detection radius", ["Retardo entre disparos"]="Delay between shots",
     ["Método de disparo"]="Fire method", ["Click usa mouse1click; Activate usa Tool:Activate()."]="Click uses mouse1click; Activate uses Tool:Activate().",
-    ["Bala directa"]="Direct bullet",
-    ["Detectar en toda la pantalla"]="Detect on whole screen",
-    ["Detecta enemigos en cualquier parte de la pantalla, no solo cerca del cursor."]="Detects enemies anywhere on screen, not just near the cursor.",
-    ["Al disparar, la bala va directo al enemigo detectado (sin mover cámara ni mouse)."]="When firing, the bullet goes straight to the detected enemy (no camera or mouse movement).",
-    ["Funciona solo con una herramienta (arma) equipada. Dispara cuando hay un enemigo dentro del radio alrededor de tu mira. Respeta los filtros de equipo y paredes de la pestaña Aim."]="Only works with a tool (weapon) equipped. Fires when an enemy is inside the radius around your crosshair. Respects the team and wall filters from the Aim tab.",
     ["Dispara solo cuando tu mira está sobre un enemigo."]="Fires only when your crosshair is over an enemy.",
     ["Solo con arma equipada"]="Only with weapon equipped", ["No dispara si no llevas una herramienta."]="Doesn't fire without a tool.",
     ["No dispara a jugadores de tu equipo."]="Doesn't fire at your teammates.",
     ["Retardo de reacción"]="Reaction delay", ["Intervalo entre disparos"]="Interval between shots",
-    ["Usa el método de disparo elegido en Autoshot. Dispara hacia donde apunta el cursor (o el centro en primera persona)."]="Uses the fire method chosen in Autoshot. Fires where the cursor points (or the center in first person).",
+    ["Dispara hacia donde apunta el cursor (o el centro en primera persona)."]="Fires where the cursor points (or the center in first person).",
     ["Activa el ESP con las opciones de abajo."]="Enables ESP with the options below.", ["Elementos"]="Elements",
     ["Caja alrededor del jugador."]="Box around the player.", ["Dibuja los huesos del personaje."]="Draws the character's bones.",
     ["Barra de vida"]="Health bar", ["Barra al costado con la salud."]="Side bar showing health.",
@@ -330,7 +347,7 @@ local Trad = {
     ["Borra las teclas asignadas a las funciones."]="Clears the keys assigned to features.", ["Quitar todos"]="Remove all",
     ["Sonido"]="Sound", ["Sonidos de clic"]="Click sounds", ["Suena al hacer clic en una opción."]="Plays when you click an option.",
     ["Volumen"]="Volume", ["Acerca de"]="About",
-    ["NAHUALHUB v2.7  •  Premium Edition\nEl botón flotante N abre o cierra el menú. Personaliza colores y tamaño en GENERAL > Apariencia."]="NAHUALHUB v2.7  •  Premium Edition\nThe floating N button opens or closes the menu. Customize colors and size in GENERAL > Appearance.",
+    ["NAHUALHUB v2.8  •  Premium Edition\nEl botón flotante N abre o cierra el menú. Personaliza colores y tamaño en GENERAL > Apariencia."]="NAHUALHUB v2.8  •  Premium Edition\nThe floating N button opens or closes the menu. Customize colors and size in GENERAL > Appearance.",
     -- idioma y configuración
     ["Idioma"]="Language", ["Cambia el idioma del menú."]="Changes the menu language.",
     ["Configuración"]="Config", ["Nombre de la configuración"]="Config name",
@@ -407,7 +424,7 @@ ScreenGui.DescendantAdded:Connect(ponerTexto)
 -- Notificaciones
 local function notificar(texto)
     local t = new("TextLabel", {
-        Size = UDim2.new(0, 300, 0, 38), Position = UDim2.new(0.5, -150, 1, 10),
+        Size = UDim2.new(0, 300, 0, 38), Position = UDim2.new(0.5, -150, 1, 10), BackgroundTransparency = 0.2,
         Text = texto, Font = Enum.Font.GothamMedium, TextSize = 12, ZIndex = 20,
         __t = {BackgroundColor3 = "panel", TextColor3 = "texto"}, Parent = ScreenGui,
     }, {corner(19), stroke("accent", 1.3, 0.2)})
@@ -419,6 +436,210 @@ local function notificar(texto)
             t:Destroy()
         end
     end)
+end
+
+-- ========== SISTEMA DE KEY (Junkie / jnkie.com) ==========
+-- Devuelve true si la key es válida. Si el usuario cierra la ventana, devuelve false.
+local function sistemaKey()
+    local archivo = KEY_CFG.carpeta .. "/key.txt"
+    local VERDE = Color3.fromRGB(90, 230, 120)
+
+    local function configurado()
+        for _, k in ipairs({"service", "identifier", "provider"}) do
+            local v = tostring(KEY_CFG[k] or "")
+            if v == "" or string.sub(v, 1, 3) == "TU_" then return false end
+        end
+        return true
+    end
+
+    -- Cargar el SDK oficial de Junkie
+    local Junkie
+    local okSdk, lib = pcall(function() return loadstring(game:HttpGet("https://jnkie.com/sdk/library.lua"))() end)
+    if okSdk and type(lib) == "table" then
+        Junkie = lib
+        Junkie.service = KEY_CFG.service
+        Junkie.identifier = KEY_CFG.identifier
+        Junkie.provider = KEY_CFG.provider
+    end
+
+    -- Verifica una key con el SDK. Devuelve (valida, mensajeDeError)
+    local function comprobar(key)
+        if not Junkie then return false, "No se pudo cargar el SDK de Junkie. Revisa tu conexión o que tu executor permita HttpGet." end
+        if not configurado() then return false, "Falta configurar service / identifier / provider en KEY_CFG." end
+        local ok, res = pcall(function() return Junkie.check_key(key) end)
+        if not ok then return false, "Error al verificar: " .. tostring(res) end
+        if type(res) == "table" then
+            return res.valid == true, res.error and tostring(res.error) or nil
+        end
+        return res == true, nil
+    end
+
+    local function traducirError(e)
+        local s = string.lower(tostring(e or ""))
+        if s == "" then return "Key inválida." end
+        if string.find(s, "expire") then return "Tu key expiró. Consigue una nueva." end
+        if string.find(s, "hwid") then return "Esta key está vinculada a otro dispositivo." end
+        if string.find(s, "used") then return "Esta key de un solo uso ya fue utilizada." end
+        if string.find(s, "disabled") or string.find(s, "invalidated") then return "Esta key fue desactivada." end
+        if string.find(s, "service") then return "Esta key es de otro servicio." end
+        if string.find(s, "not found") or string.find(s, "not_found") or string.find(s, "invalid") then return "Key inválida o no encontrada." end
+        return "Key inválida: " .. tostring(e)
+    end
+
+    local function guardarKey(k)
+        pcall(function()
+            if writefile then
+                if makefolder and isfolder and not isfolder(KEY_CFG.carpeta) then makefolder(KEY_CFG.carpeta) end
+                writefile(archivo, k)
+            end
+        end)
+    end
+
+    -- Auto-login con la key guardada
+    local guardada
+    pcall(function()
+        if isfile and readfile and isfile(archivo) then
+            guardada = string.gsub(readfile(archivo), "%s", "")
+        end
+    end)
+    if guardada and guardada ~= "" then
+        local valida = comprobar(guardada)
+        if valida then
+            pcall(function() getgenv().SCRIPT_KEY = guardada end)
+            return true
+        end
+    end
+
+    -- ---------- Ventana de key ----------
+    local gui = new("ScreenGui", {
+        Name = "NahualKey", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 200,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = guiParent,
+    })
+    local fondoOsc = new("Frame", {Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, BorderSizePixel = 0, Parent = gui})
+    local frame = new("Frame", {
+        Size = UDim2.new(0, 380, 0, 250), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+        BackgroundColor3 = BLANCO, ClipsDescendants = true, Parent = gui,
+    }, {corner(14)})
+    new("UIGradient", {Color = ColorSequence.new(T.fondo, T.fondo2), Rotation = 90, Parent = frame})
+    local escala = new("UIScale", {Scale = 0.85, Parent = frame})
+    tweenEx(escala, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+
+    local borde = Instance.new("UIStroke")
+    borde.Thickness = 2
+    borde.Color = BLANCO
+    borde.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    borde.Parent = frame
+    local gBorde = Instance.new("UIGradient")
+    gBorde.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.accent), ColorSequenceKeypoint.new(0.5, T.accent2), ColorSequenceKeypoint.new(1, T.accent),
+    })
+    gBorde.Parent = borde
+    local con = RunService.Heartbeat:Connect(function(dt) gBorde.Rotation = (gBorde.Rotation + 70 * dt) % 360 end)
+
+    new("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 28), Position = UDim2.new(0, 0, 0, 16), BackgroundTransparency = 1, Text = "NAHUALHUB",
+        Font = Enum.Font.GothamBlack, TextSize = 22, TextColor3 = T.accent, Parent = frame,
+    })
+    new("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 16), Position = UDim2.new(0, 0, 0, 46), BackgroundTransparency = 1,
+        Text = "Introduce tu key para continuar", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = T.sub, Parent = frame,
+    })
+
+    local caja = new("TextBox", {
+        Size = UDim2.new(1, -40, 0, 38), Position = UDim2.new(0, 20, 0, 80), BackgroundColor3 = T.panel2, BackgroundTransparency = 0.5,
+        Text = "", PlaceholderText = "Pega tu key aquí", PlaceholderColor3 = T.sub, TextColor3 = T.texto,
+        ClearTextOnFocus = false, Font = Enum.Font.GothamMedium, TextSize = 13, Parent = frame,
+    }, {corner(8), stroke(T.accent, 1.4, 0.35)})
+
+    local function boton(txt, x, w)
+        local b = new("TextButton", {
+            Size = UDim2.new(0, w, 0, 38), Position = UDim2.new(0, x, 0, 132), BackgroundColor3 = T.accent,
+            BackgroundTransparency = 0.7, Text = txt, TextColor3 = T.texto, Font = Enum.Font.GothamBold, TextSize = 13,
+            AutoButtonColor = false, Parent = frame,
+        }, {bubble(19), stroke(T.accent, 1.6, 0.1)})
+        local sc = new("UIScale", {Scale = 1, Parent = b})
+        b.MouseEnter:Connect(function() tween(sc, 0.12, {Scale = 1.04}); tween(b, 0.12, {BackgroundTransparency = 0.55}) end)
+        b.MouseLeave:Connect(function() tween(sc, 0.12, {Scale = 1}); tween(b, 0.12, {BackgroundTransparency = 0.7}) end)
+        return b
+    end
+    local bVerificar = boton("Verificar", 20, 166)
+    local bObtener = boton("Obtener key", 194, 166)
+
+    local estadoLbl = new("TextLabel", {
+        Size = UDim2.new(1, -40, 0, 54), Position = UDim2.new(0, 20, 0, 184), BackgroundTransparency = 1, Text = "",
+        Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = T.sub, TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Top, Parent = frame,
+    })
+    local function estado(txt, col) estadoLbl.Text = txt; estadoLbl.TextColor3 = col or T.sub end
+
+    local cerrar = new("TextButton", {
+        Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(1, -36, 0, 10), BackgroundColor3 = T.rojo, BackgroundTransparency = 0.45,
+        Text = "X", TextColor3 = BLANCO, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false, Parent = frame,
+    }, {corner(13)})
+
+    if not configurado() then
+        estado("Falta configurar KEY_CFG (service, identifier, provider) al inicio del script.", T.rojo)
+    elseif not Junkie then
+        estado("No se pudo cargar el SDK de Junkie. Revisa tu conexión o que tu executor permita HttpGet.", T.rojo)
+    end
+
+    local resultado = nil
+    local ocupado = false
+
+    local function verificar()
+        if ocupado then return end
+        local key = string.gsub(caja.Text, "^%s+", "")
+        key = string.gsub(key, "%s+$", "")
+        if key == "" then estado("Escribe tu key primero.", T.rojo) return end
+        ocupado = true
+        estado("Verificando...", T.sub)
+        local valida, err = comprobar(key)
+        ocupado = false
+        if valida then
+            guardarKey(key)
+            pcall(function() getgenv().SCRIPT_KEY = key end)
+            estado("Key válida. ¡Bienvenido!", VERDE)
+            task.wait(0.7)
+            resultado = true
+        else
+            estado(traducirError(err), T.rojo)
+        end
+    end
+    bVerificar.MouseButton1Click:Connect(verificar)
+    caja.FocusLost:Connect(function(enter) if enter then verificar() end end)
+
+    local pidiendoLink = false
+    bObtener.MouseButton1Click:Connect(function()
+        if pidiendoLink then return end
+        if not Junkie or not configurado() then estado("Configura primero KEY_CFG y verifica tu conexión.", T.rojo) return end
+        pidiendoLink = true
+        estado("Solicitando link...", T.sub)
+        local ok, link, err = pcall(Junkie.get_key_link)
+        pidiendoLink = false
+        if ok and type(link) == "string" and link ~= "" then
+            local copiar = setclipboard or toclipboard
+            if copiar and pcall(copiar, link) then
+                estado("Link copiado al portapapeles. Ábrelo en tu navegador para obtener tu key.", VERDE)
+            else
+                estado("Abre este link: " .. link, VERDE)
+                caja.Text = link
+            end
+        else
+            estado("No se pudo obtener el link: " .. tostring(ok and err or link), T.rojo)
+        end
+    end)
+
+    cerrar.MouseButton1Click:Connect(function() if resultado == nil then resultado = false end end)
+
+    repeat task.wait() until resultado ~= nil
+    con:Disconnect()
+    gui:Destroy()
+    return resultado == true
+end
+
+if not sistemaKey() then
+    ScreenGui:Destroy()
+    return
 end
 
 -- ========== SONIDOS ==========
@@ -565,7 +786,7 @@ new("Frame", {
 })
 
 do
-local Logo = new("Frame", {Size = UDim2.new(0, 32, 0, 32), Position = UDim2.new(0, 12, 0.5, -16), BackgroundColor3 = BLANCO, Parent = Header}, {redondo()})
+local Logo = new("Frame", {Size = UDim2.new(0, 32, 0, 32), Position = UDim2.new(0, 12, 0.5, -16), BackgroundColor3 = BLANCO, BackgroundTransparency = 0.25, Parent = Header}, {redondo()})
 grad(Logo, "accent", "accent2", 45)
 new("TextLabel", {
     Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "N", TextColor3 = BLANCO,
@@ -584,9 +805,9 @@ local SubLbl = new("TextLabel", {
     __t = {TextColor3 = "sub"}, Parent = Header,
 })
 do
-local Badge = new("Frame", {Size = UDim2.new(0, 42, 0, 20), Position = UDim2.new(0, 150, 0.5, -10), __t = {BackgroundColor3 = "accent"}, Parent = Header}, {corner(10)})
+local Badge = new("Frame", {Size = UDim2.new(0, 42, 0, 20), Position = UDim2.new(0, 150, 0.5, -10), BackgroundTransparency = 0.6, __t = {BackgroundColor3 = "accent"}, Parent = Header}, {corner(10), stroke("accent", 1, 0.2)})
 new("TextLabel", {
-    Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "v2.7", TextColor3 = BLANCO,
+    Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "v2.8", TextColor3 = BLANCO,
     Font = Enum.Font.GothamBold, TextSize = 11, Parent = Badge,
 })
 
@@ -595,7 +816,7 @@ end
 -- Píldora "online"
 do
 local Pill = new("Frame", {
-    Size = UDim2.new(0, 112, 0, 26), Position = UDim2.new(0.5, -56, 0.5, -13), BackgroundTransparency = 0.1,
+    Size = UDim2.new(0, 112, 0, 26), Position = UDim2.new(0.5, -56, 0.5, -13), BackgroundTransparency = 0.4,
     __t = {BackgroundColor3 = "panel"}, Parent = Header,
 }, {corner(13), stroke("accent", 1, 0.5)})
 new("Frame", {Size = UDim2.new(0, 8, 0, 8), Position = UDim2.new(0, 12, 0.5, -4), BackgroundColor3 = T.verde, Parent = Pill}, {corner(4)})
@@ -618,10 +839,10 @@ local aplicarPreset
 local temaIdx = 1
 do
 local TemaBtn = new("TextButton", {
-    Size = UDim2.new(0, 74, 0, 26), Position = UDim2.new(1, -152, 0.5, -13), Text = "Tema",
+    Size = UDim2.new(0, 74, 0, 26), Position = UDim2.new(1, -152, 0.5, -13), Text = "Tema", BackgroundTransparency = 0.6,
     Font = Enum.Font.GothamMedium, TextSize = 12, AutoButtonColor = false,
     __t = {BackgroundColor3 = "panel2", TextColor3 = "texto"}, Parent = Header,
-}, {corner(13), stroke("accent", 1, 0.5)})
+}, {corner(13), stroke("accent", 1, 0.4)})
 efecto(TemaBtn, TemaBtn, {hover = 1.06, sinRipple = true})
 TemaBtn.MouseButton1Click:Connect(function()
     temaIdx = temaIdx % #Temas + 1
@@ -631,15 +852,15 @@ end)
 end
 
 local MinBtn = new("TextButton", {
-    Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(1, -68, 0.5, -13), Text = "-",
+    Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(1, -68, 0.5, -13), Text = "-", BackgroundTransparency = 0.6,
     Font = Enum.Font.GothamBold, TextSize = 16, AutoButtonColor = false,
     __t = {BackgroundColor3 = "panel2", TextColor3 = "texto"}, Parent = Header,
-}, {corner(13), stroke("accent", 1, 0.5)})
+}, {corner(13), stroke("accent", 1, 0.4)})
 local CloseBtn = new("TextButton", {
-    Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(1, -36, 0.5, -13), BackgroundColor3 = T.rojo,
+    Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(1, -36, 0.5, -13), BackgroundColor3 = T.rojo, BackgroundTransparency = 0.45,
     Text = "X", TextColor3 = BLANCO, Font = Enum.Font.GothamBold, TextSize = 12,
     AutoButtonColor = false, Parent = Header,
-}, {corner(13)})
+}, {corner(13), stroke(T.rojo, 1, 0.2)})
 efecto(MinBtn, MinBtn, {hover = 1.1, sinRipple = true})
 efecto(CloseBtn, CloseBtn, {hover = 1.1, sinRipple = true})
 
@@ -706,7 +927,7 @@ new("Frame", {
 
 -- Buscador
 local Search = new("TextBox", {
-    Size = UDim2.new(1, -20, 0, 32), Position = UDim2.new(0, 10, 0, 10), BackgroundTransparency = 0.15,
+    Size = UDim2.new(1, -20, 0, 32), Position = UDim2.new(0, 10, 0, 10), BackgroundTransparency = 0.4,
     Text = "", PlaceholderText = "Buscar...", ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 12,
     TextXAlignment = Enum.TextXAlignment.Left,
     __t = {BackgroundColor3 = "panel", TextColor3 = "texto", PlaceholderColor3 = "sub"}, Parent = Sidebar,
@@ -781,7 +1002,7 @@ end)
 local FloatBtn = new("TextButton", {
     Size = UDim2.new(0, 38, 0, 38), Position = UDim2.new(0, 12, 0.5, -19), Text = "N", TextColor3 = BLANCO,
     Font = Enum.Font.GothamBlack, TextSize = 16, AutoButtonColor = false, ZIndex = 10, Visible = false,
-    __t = {BackgroundColor3 = "accent"}, Parent = ScreenGui,
+    BackgroundTransparency = 0.45, __t = {BackgroundColor3 = "accent"}, Parent = ScreenGui,
 }, {corner(19), stroke("accent2", 1.5, 0.1)})
 efecto(FloatBtn, FloatBtn, {hover = 1.12, sinRipple = true})
 FloatBtn.MouseButton1Click:Connect(alternarMenu)
@@ -794,7 +1015,7 @@ local feats, headersBusq = {}, {}
 local paginaActual = ""
 local catGrads = {}
 
--- Categoría: burbuja transparente con degradado animado en el borde, brillo y flecha en burbuja
+-- Categoría (desplegable): burbuja semitransparente con relleno degradado, borde grueso brillante y flecha en burbuja
 local function getCat(nombre)
     if cats[nombre] then return cats[nombre] end
     catOrden = catOrden + 1
@@ -802,39 +1023,28 @@ local function getCat(nombre)
     new("Frame", {Size = UDim2.new(1, 0, 0, 4), BackgroundTransparency = 1, LayoutOrder = catOrden * 10 - 1, Parent = SideScroll})
 
     local header = new("TextButton", {
-        Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = BLANCO, BackgroundTransparency = 0.82, Text = "",
+        Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = BLANCO, BackgroundTransparency = 0.5, Text = "",
         AutoButtonColor = false, LayoutOrder = catOrden * 10, Parent = SideScroll,
-    }, {bubble(19), stroke(BLANCO, 1.6, 0.2)})
-    local g = Instance.new("UIGradient")
-    g.Rotation = 0
-    onTema(function()
-        g.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, T.accent),
-            ColorSequenceKeypoint.new(0.5, T.accent2),
-            ColorSequenceKeypoint.new(1, T.accent),
-        })
-    end)
-    g.Parent = header
-    catGrads[#catGrads + 1] = g
+    }, {bubble(20)})
+    local borde = stroke(BLANCO, 2.2, 0)
+    borde.Parent = header
+    catGrads[#catGrads + 1] = gradTema(header, 0)      -- relleno degradado (semitransparente)
+    catGrads[#catGrads + 1] = gradTema(borde, 0)       -- borde degradado brillante
 
-    brillo(header, 0.88, 20)
-    new("Frame", {
-        Size = UDim2.new(0, 8, 0, 8), Position = UDim2.new(0, 14, 0, 9), BackgroundColor3 = BLANCO,
-        BackgroundTransparency = 0.55, BorderSizePixel = 0, Parent = header,
-    }, {redondo()})
+    brillo(header, 0.7, 22)
     new("TextLabel", {
         Size = UDim2.new(1, -56, 1, 0), Position = UDim2.new(0, 18, 0, 1), BackgroundTransparency = 1,
-        Text = string.upper(nombre), Font = Enum.Font.GothamBlack, TextSize = 12, TextColor3 = BLANCO,
-        TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
+        Text = string.upper(nombre), Font = Enum.Font.GothamBlack, TextSize = 13, TextColor3 = BLANCO,
+        TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.45,
         TextXAlignment = Enum.TextXAlignment.Left, Parent = header,
     })
     local chevBg = new("Frame", {
-        Size = UDim2.new(0, 22, 0, 22), Position = UDim2.new(1, -32, 0.5, -11), BackgroundColor3 = BLANCO,
-        BackgroundTransparency = 0.85, BorderSizePixel = 0, Parent = header,
-    }, {redondo(), stroke(BLANCO, 1, 0.4)})
+        Size = UDim2.new(0, 24, 0, 24), Position = UDim2.new(1, -34, 0.5, -12), BackgroundColor3 = BLANCO,
+        BackgroundTransparency = 0.6, BorderSizePixel = 0, Parent = header,
+    }, {redondo(), stroke(BLANCO, 1.4, 0.15)})
     local chev = new("TextLabel", {
-        Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "v", Font = Enum.Font.GothamBold,
-        TextSize = 11, TextColor3 = BLANCO, Parent = chevBg,
+        Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "v", Font = Enum.Font.GothamBlack,
+        TextSize = 12, TextColor3 = BLANCO, Parent = chevBg,
     })
     efecto(header, header, {hover = 1.03, glow = BLANCO})
 
@@ -855,7 +1065,7 @@ local function getCat(nombre)
     return cats[nombre]
 end
 
--- el degradado de las categorías se mueve
+-- los degradados de las categorías se mueven
 conns[#conns + 1] = RunService.Heartbeat:Connect(function(dt)
     if not Main.Visible then return end
     for _, g in ipairs(catGrads) do g.Rotation = (g.Rotation + 35 * dt) % 360 end
@@ -872,16 +1082,16 @@ local function actualizarBadge(pagina)
     end
 end
 
--- Pestañas en burbuja transparente: activa = tinte del tema; inactiva = casi vacía con borde del tema
+-- Pestañas semitransparentes: activa = tinte suave del tema + borde brillante; inactiva = casi vacía
 local function estilizarTabs()
     for n, o in pairs(tabObjs) do
         local a = (n == paginaActiva)
         tween(o.btn, 0.2, {
-            BackgroundColor3 = a and T.accent or T.fondo, BackgroundTransparency = a and 0.55 or 0.9,
+            BackgroundColor3 = a and T.accent or T.fondo, BackgroundTransparency = a and 0.72 or 0.92,
             TextColor3 = a and BLANCO or T.sub,
         })
-        tween(o.st, 0.2, {Color = a and T.accent2 or T.accent, Transparency = a and 0 or 0.25})
-        tween(o.gloss, 0.2, {BackgroundTransparency = a and 0.8 or 0.93})
+        tween(o.st, 0.2, {Color = a and T.accent2 or T.accent, Transparency = a and 0 or 0.3})
+        tween(o.gloss, 0.2, {BackgroundTransparency = a and 0.75 or 0.93})
     end
 end
 
@@ -909,23 +1119,23 @@ local function crearTab(categoria, nombre, scroll, _color, conBadge)
     paginaActual = nombre
 
     local btn = new("TextButton", {
-        Size = UDim2.new(1, 0, 0, 36), BackgroundColor3 = T.panel2, BackgroundTransparency = 0.9, Text = nombre,
+        Size = UDim2.new(1, 0, 0, 36), BackgroundColor3 = T.panel2, BackgroundTransparency = 0.92, Text = nombre,
         TextColor3 = T.sub, Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
         AutoButtonColor = false, LayoutOrder = #ordenPaginas, Parent = c.cont,
     }, {bubble(18), new("UIPadding", {PaddingLeft = UDim.new(0, 18)})})
-    local st = stroke(T.accent, 1.5, 0.25)
+    local st = stroke(T.accent, 1.5, 0.3)
     st.Parent = btn
     local gloss = brillo(btn, 0.93, 16)
 
-    -- Burbuja con la cantidad de opciones activas
+    -- Burbuja semitransparente con la cantidad de opciones activas
     local badge, badgeLbl
     if conBadge then
         badge = new("Frame", {
-            Size = UDim2.new(0, 22, 0, 22), Position = UDim2.new(1, -30, 0.5, -11), BackgroundColor3 = BLANCO,
-            BackgroundTransparency = 0.1, BorderSizePixel = 0, Visible = false, Parent = btn,
-        }, {redondo()})
+            Size = UDim2.new(0, 22, 0, 22), Position = UDim2.new(1, -30, 0.5, -11), BackgroundTransparency = 0.45,
+            BorderSizePixel = 0, Visible = false, __t = {BackgroundColor3 = "accent"}, Parent = btn,
+        }, {redondo(), stroke(BLANCO, 1.2, 0.3)})
         badgeLbl = new("TextLabel", {
-            Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "0", TextColor3 = Color3.fromRGB(25, 15, 35),
+            Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "0", TextColor3 = BLANCO,
             Font = Enum.Font.GothamBlack, TextSize = 11, Parent = badge,
         })
     end
@@ -986,7 +1196,7 @@ local function registrar(row, titulo, desc)
     feats[#feats + 1] = {row = row, texto = string.lower(titulo .. " " .. (desc or "")), page = paginaActual}
 end
 
--- ========== COMPONENTES (tarjetas planas, con los colores del tema) ==========
+-- ========== COMPONENTES (tarjetas planas semitransparentes, con los colores del tema) ==========
 local function crearSeccion(parent, texto)
     local l = new("TextLabel", {
         Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, TextYAlignment = Enum.TextYAlignment.Bottom,
@@ -1011,9 +1221,9 @@ end
 local function crearCard(parent, titulo, desc, alto)
     local tieneDesc = desc and desc ~= ""
     local card = new("Frame", {
-        Size = UDim2.new(1, 0, 0, alto or 58), BackgroundTransparency = 0.1, __t = {BackgroundColor3 = "panel"}, Parent = parent,
+        Size = UDim2.new(1, 0, 0, alto or 58), BackgroundTransparency = 0.3, __t = {BackgroundColor3 = "panel"}, Parent = parent,
     }, {corner(8)})
-    local st = stroke("accent", 1, 0.75)
+    local st = stroke("accent", 1, 0.7)
     st.Parent = card
 
     new("TextLabel", {
@@ -1040,14 +1250,10 @@ local function crearToggle(parent, titulo, desc, callback, op)
     local obj = {titulo = titulo}
     regToggles[pg .. "/" .. titulo] = obj
 
-    local sw = new("Frame", {Size = UDim2.new(0, 46, 0, 24), Position = UDim2.new(1, -60, 0.5, -12), BackgroundColor3 = T.off, Parent = card}, {redondo()})
+    local sw = new("Frame", {Size = UDim2.new(0, 46, 0, 24), Position = UDim2.new(1, -60, 0.5, -12), BackgroundColor3 = T.off, BackgroundTransparency = 0.45, Parent = card}, {redondo()})
     local glow = stroke("accent2", 1.5, 1)
     glow.Parent = sw
-    local knob = new("Frame", {Size = UDim2.new(0, 18, 0, 18), Position = UDim2.new(0, 3, 0.5, -9), BackgroundColor3 = BLANCO, Parent = sw}, {redondo()})
-    new("Frame", {
-        Size = UDim2.new(0, 5, 0, 5), Position = UDim2.new(0.2, 0, 0.16, 0), BackgroundColor3 = Color3.fromRGB(200, 200, 215),
-        BackgroundTransparency = 0.2, BorderSizePixel = 0, Parent = knob,
-    }, {redondo()})
+    local knob = new("Frame", {Size = UDim2.new(0, 18, 0, 18), Position = UDim2.new(0, 3, 0.5, -9), BackgroundColor3 = BLANCO, BackgroundTransparency = 0.1, Parent = sw}, {redondo()})
     local btn = new("TextButton", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", Parent = card})
 
     local function set(v, silencioso)
@@ -1057,8 +1263,8 @@ local function crearToggle(parent, titulo, desc, callback, op)
             activos[pg] = (activos[pg] or 0) + (v and 1 or -1)
             actualizarBadge(pg)
         end
-        tween(sw, 0.2, {BackgroundColor3 = v and T.accent or T.off})
-        tween(glow, 0.2, {Transparency = v and 0.3 or 1})
+        tween(sw, 0.2, {BackgroundColor3 = v and T.accent or T.off, BackgroundTransparency = v and 0.3 or 0.45})
+        tween(glow, 0.2, {Transparency = v and 0.2 or 1})
         tweenEx(knob, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
             Position = v and UDim2.new(0, 25, 0.5, -9) or UDim2.new(0, 3, 0.5, -9),
         })
@@ -1088,10 +1294,10 @@ local function crearToggle(parent, titulo, desc, callback, op)
     -- Botón de atajo de teclado
     if not op.sinBind then
         local bb = new("TextButton", {
-            Size = UDim2.new(0, 36, 0, 28), Position = UDim2.new(1, -106, 0.5, -14), BackgroundTransparency = 0.1,
+            Size = UDim2.new(0, 36, 0, 28), Position = UDim2.new(1, -106, 0.5, -14), BackgroundTransparency = 0.6,
             Text = "—", Font = Enum.Font.GothamBold, TextSize = 11, AutoButtonColor = false, ZIndex = 3,
             __t = {BackgroundColor3 = "panel2"}, Parent = card,
-        }, {corner(14), stroke("accent", 1, 0.65)})
+        }, {corner(14), stroke("accent", 1, 0.55)})
         efecto(bb, bb, {hover = 1.08, sinRipple = true, sinGlow = true})
         local function etiqueta()
             bb.Text = obj.key and nombreTecla(obj.key) or "—"
@@ -1150,14 +1356,14 @@ local function crearSlider(parent, titulo, min, max, def, paso, callback, sufijo
         __t = {TextColor3 = "accent"}, Parent = card,
     })
     local hit = new("Frame", {Size = UDim2.new(1, -44, 0, 22), Position = UDim2.new(0, 22, 0, 33), BackgroundTransparency = 1, Parent = card})
-    local track = new("Frame", {Size = UDim2.new(1, 0, 0, 10), Position = UDim2.new(0, 0, 0.5, -5), __t = {BackgroundColor3 = "off"}, Parent = hit}, {redondo()})
-    local fill = new("Frame", {Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = BLANCO, Parent = track}, {redondo()})
+    local track = new("Frame", {Size = UDim2.new(1, 0, 0, 10), Position = UDim2.new(0, 0, 0.5, -5), BackgroundTransparency = 0.45, __t = {BackgroundColor3 = "off"}, Parent = hit}, {redondo()})
+    local fill = new("Frame", {Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = BLANCO, BackgroundTransparency = 0.2, Parent = track}, {redondo()})
     local fillG = Instance.new("UIGradient")
     onTema(function() fillG.Color = ColorSequence.new(T.accent, T.accent2) end)
     fillG.Parent = fill
     local knob = new("Frame", {
         Size = UDim2.new(0, 18, 0, 18), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
-        BackgroundColor3 = BLANCO, ZIndex = 3, Parent = track,
+        BackgroundColor3 = BLANCO, BackgroundTransparency = 0.15, ZIndex = 3, Parent = track,
     }, {redondo(), stroke("accent", 2.5, 0.1)})
 
     local actual = def
@@ -1203,10 +1409,10 @@ end
 local function crearAccion(parent, titulo, desc, textoBtn, callback)
     local card = crearCard(parent, titulo, desc, 58)
     local b = new("TextButton", {
-        Size = UDim2.new(0, 124, 0, 30), Position = UDim2.new(1, -138, 0.5, -15), Text = textoBtn,
+        Size = UDim2.new(0, 124, 0, 30), Position = UDim2.new(1, -138, 0.5, -15), Text = textoBtn, BackgroundTransparency = 0.75,
         Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false,
-        __t = {BackgroundColor3 = "panel2", TextColor3 = "accent"}, Parent = card,
-    }, {corner(8), stroke("accent", 1.2, 0.5)})
+        __t = {BackgroundColor3 = "accent", TextColor3 = "texto"}, Parent = card,
+    }, {corner(8), stroke("accent", 1.3, 0.2)})
     efecto(b, b, {hover = 1.05, sinGlow = true})
     b.MouseButton1Click:Connect(callback)
     return b
@@ -1224,14 +1430,19 @@ local function crearSelector(parent, titulo, desc, opciones, def, callback)
     local function pintar()
         for i, b in ipairs(botones) do
             local a = (i == sel)
-            tween(b, 0.2, {BackgroundColor3 = a and T.accent or T.panel2, TextColor3 = a and BLANCO or T.sub})
+            tween(b, 0.2, {
+                BackgroundColor3 = a and T.accent or T.panel2, BackgroundTransparency = a and 0.65 or 0.8,
+                TextColor3 = a and BLANCO or T.sub,
+            })
+            local s = b:FindFirstChildOfClass("UIStroke")
+            if s then tween(s, 0.2, {Color = T.accent, Transparency = a and 0 or 0.6}) end
         end
     end
     for i, nombre in ipairs(opciones) do
         local b = new("TextButton", {
-            Size = UDim2.new(1 / n, -(6 * (n - 1)) / n, 1, 0), BackgroundColor3 = T.panel2, Text = nombre,
+            Size = UDim2.new(1 / n, -(6 * (n - 1)) / n, 1, 0), BackgroundColor3 = T.panel2, BackgroundTransparency = 0.8, Text = nombre,
             TextColor3 = T.sub, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false, LayoutOrder = i, Parent = fila,
-        }, {corner(8), stroke("accent", 1, 0.65)})
+        }, {corner(8), stroke("accent", 1.2, 0.6)})
         efecto(b, b, {hover = 1.04, sinGlow = true})
         b.MouseButton1Click:Connect(function()
             sel = i
@@ -1562,7 +1773,7 @@ local function obtenerParte(char)
     return char:FindFirstChild("HumanoidRootPart")
 end
 
-local function mejorObjetivo(cam, mouse, fovMax, rangoMax)
+local function mejorObjetivo(cam, mouse)
     local mejor, mejorDist
     local miChar = LocalPlayer.Character
     local params = RaycastParams.new()
@@ -1576,9 +1787,9 @@ local function mejorObjetivo(cam, mouse, fovMax, rangoMax)
                 local parte = obtenerParte(char)
                 if parte then
                     local v, enPantalla = cam:WorldToViewportPoint(parte.Position)
-                    if enPantalla and (parte.Position - cam.CFrame.Position).Magnitude <= (rangoMax or aimRango) then
+                    if enPantalla and (parte.Position - cam.CFrame.Position).Magnitude <= aimRango then
                         local d = (Vector2.new(v.X, v.Y) - mouse).Magnitude
-                        if d <= (fovMax or aimFOV) and (not mejorDist or d < mejorDist) then
+                        if d <= aimFOV and (not mejorDist or d < mejorDist) then
                             local visible = true
                             if aimWall then
                                 local origen = cam.CFrame.Position
@@ -1624,96 +1835,11 @@ local function moverMouse(dx, dy)
     return (pcall(f, dx, dy))
 end
 
--- ---------- Disparo ----------
-local asEnabled, asFOV, asDelay = false, 250, 120
+-- ---------- Disparo (usado por el Triggerbot) ----------
 local trigEnabled, trigDelay, trigInterval, trigSoloArma, trigTeam = false, 60, 150, true, true
 local disparoMetodo = 1       -- 1 = Click (mouse1click), 2 = Tool:Activate()
 local ultimoDisparo = 0
 local trigDesde = nil
-
--- ---------- Bala directa (Autoshot) ----------
--- Durante un instante tras cada disparo del Autoshot, el juego "ve" al enemigo detectado como destino
--- (Mouse.Hit / Mouse.Target / Raycast / FindPartOnRay). No mueve la cámara ni el mouse.
-local asRango, asDirecto, asPantalla = 500, true, true
-local silentObj, silentHasta = nil, 0
-local function silentActivo()
-    return silentObj ~= nil and silentObj.Parent ~= nil and tick() < silentHasta
-end
-
-pcall(function()
-    if not (hookmetamethod and getnamecallmethod and checkcaller) then return end
-    local nc = newcclosure or function(f) return f end
-    local mouse = LocalPlayer:GetMouse()
-    local inset = Vector2.new(0, 36)
-    pcall(function() inset = game:GetService("GuiService"):GetGuiInset() end)
-
-    -- Posición del objetivo en pantalla, con matemática pura (sin llamar métodos dentro del hook)
-    -- devuelve: cámara, coords de viewport (GetMouseLocation / ViewportPointToRay), coords de pantalla (Mouse.X/Y / ScreenPointToRay)
-    local function posObjetivo()
-        local cam = workspace.CurrentCamera
-        if not (cam and silentObj) then return nil end
-        local rel = cam.CFrame:PointToObjectSpace(silentObj.Position)
-        if rel.Z >= -0.01 then return nil end
-        local vp = cam.ViewportSize
-        local k = vp.Y / (2 * math.tan(math.rad(cam.FieldOfView) / 2))
-        local v = Vector2.new(vp.X / 2 + (rel.X / -rel.Z) * k, vp.Y / 2 - (rel.Y / -rel.Z) * k)
-        return cam, v, v - inset
-    end
-
-    local oldIndex, oldNC
-    oldIndex = hookmetamethod(game, "__index", nc(function(self, key)
-        if vivo and self == mouse and silentActivo() and not checkcaller() then
-            if key == "Hit" then return CFrame.new(silentObj.Position)
-            elseif key == "Target" then return silentObj
-            elseif key == "X" or key == "Y" or key == "UnitRay" then
-                local cam, _, s = posObjetivo()
-                if cam then
-                    if key == "X" then return math.floor(s.X) end
-                    if key == "Y" then return math.floor(s.Y) end
-                    local origen = cam.CFrame.Position
-                    return Ray.new(origen, (silentObj.Position - origen).Unit)
-                end
-            end
-        end
-        return oldIndex(self, key)
-    end))
-
-    oldNC = hookmetamethod(game, "__namecall", nc(function(self, ...)
-        if vivo and silentActivo() and not checkcaller() then
-            local m = getnamecallmethod()
-            if self == workspace then
-                local n = select("#", ...)
-                local a = {...}
-                if m == "Raycast" and typeof(a[1]) == "Vector3" and typeof(a[2]) == "Vector3" then
-                    local dir = silentObj.Position - a[1]
-                    a[2] = dir.Unit * math.max(a[2].Magnitude, dir.Magnitude + 5)
-                    return oldNC(self, table.unpack(a, 1, n))
-                elseif (m == "FindPartOnRay" or m == "FindPartOnRayWithIgnoreList" or m == "FindPartOnRayWithWhitelist")
-                    and typeof(a[1]) == "Ray" then
-                    local r = a[1]
-                    local dir = silentObj.Position - r.Origin
-                    a[1] = Ray.new(r.Origin, dir.Unit * math.max(r.Direction.Magnitude, dir.Magnitude + 5))
-                    return oldNC(self, table.unpack(a, 1, n))
-                end
-            elseif self == UserInputService and m == "GetMouseLocation" then
-                local cam, v = posObjetivo()
-                if cam then return v end
-            elseif m == "ViewportPointToRay" or m == "ScreenPointToRay" then
-                if self == workspace.CurrentCamera then
-                    local cam, v, s = posObjetivo()
-                    if cam then
-                        local n = select("#", ...)
-                        local a = {...}
-                        local pt = (m == "ViewportPointToRay") and v or s
-                        a[1], a[2] = pt.X, pt.Y
-                        return oldNC(self, table.unpack(a, 1, n))
-                    end
-                end
-            end
-        end
-        return oldNC(self, ...)
-    end))
-end)
 
 local function armaEquipada()
     local ch = LocalPlayer.Character
@@ -1746,7 +1872,7 @@ local function dispararArma()
     return false
 end
 
--- ---------- Aim (con Autoshot) ----------
+-- ---------- Aim ----------
 local function pasoAim(dt)
     local cam = workspace.CurrentCamera
     local mouse = UserInputService:GetMouseLocation()
@@ -1797,24 +1923,6 @@ local function pasoAim(dt)
         cam.CFrame = cam.CFrame:Lerp(deseado, alpha)
     end
 end
-
--- ---------- Autoshot: NO apunta ni mueve nada, solo dispara al detectar un enemigo ----------
-local function pasoAutoshot()
-    if not asEnabled or not armaEquipada() then return end
-    local cam = workspace.CurrentCamera
-    if not cam then return end
-    local m = UserInputService:GetMouseLocation()
-    local objetivo = mejorObjetivo(cam, m, asPantalla and math.huge or asFOV, asRango)
-    if objetivo and tick() - ultimoDisparo >= asDelay / 1000 then
-        ultimoDisparo = tick()
-        if asDirecto then
-            silentObj = objetivo
-            silentHasta = tick() + 0.3    -- solo redirige durante este disparo
-        end
-        dispararArma()
-    end
-end
-conns[#conns + 1] = RunService.RenderStepped:Connect(function() pcall(pasoAutoshot) end)
 
 -- ---------- Triggerbot ----------
 local function pasoTrigger()
@@ -1911,19 +2019,6 @@ crearToggle(pAim, "Ignorar mi equipo", "No apunta a jugadores de tu equipo.", fu
 crearToggle(pAim, "No apuntar tras paredes", "Solo apunta a jugadores que puedes ver.", function(v) aimWall = v end, {sinBind = true, inicial = true})
 crearNota(pAim, "El círculo se pone verde cuando hay un objetivo fijado. En modo Mouse usa Clic izq., Shift o Siempre: con clic derecho Roblox bloquea el cursor. Mover el cursor requiere que tu executor tenga mousemoverel.", 58)
 
--- ========== PÁGINA: AUTOSHOT ==========
-local pAS = crearTab("COMBATE", "Autoshot", true, nil, true)
-crearSeccion(pAS, "Autoshot")
-crearToggle(pAS, "Autoshot", "Dispara solo al detectar un enemigo. No mueve el mouse ni la cámara.", function(v) asEnabled = v end)
-crearSeccion(pAS, "Ajustes")
-crearSlider(pAS, "Radio de detección", 50, 600, asFOV, 10, function(v) asFOV = v end, " px")
-crearSlider(pAS, "Retardo entre disparos", 50, 1000, asDelay, 10, function(v) asDelay = v end, " ms")
-crearSelector(pAS, "Método de disparo", "Click usa mouse1click; Activate usa Tool:Activate().", {"Click", "Activate"}, 1, function(_, i) disparoMetodo = i end)
-crearToggle(pAS, "Bala directa", "Al disparar, la bala va directo al enemigo detectado (sin mover cámara ni mouse).", function(v) asDirecto = v end, {sinBind = true, inicial = true})
-crearToggle(pAS, "Detectar en toda la pantalla", "Detecta enemigos en cualquier parte de la pantalla, no solo cerca del cursor.", function(v) asPantalla = v end, {sinBind = true, inicial = true})
-crearSlider(pAS, "Rango máximo", 20, 1000, asRango, 10, function(v) asRango = v end, " studs")
-crearNota(pAS, "Funciona solo con una herramienta (arma) equipada. Dispara cuando hay un enemigo dentro del radio alrededor de tu mira. Respeta los filtros de equipo y paredes de la pestaña Aim.", 46)
-
 -- ========== PÁGINA: TRIGGERBOT ==========
 local pTB = crearTab("COMBATE", "Triggerbot", true, nil, true)
 crearSeccion(pTB, "Triggerbot")
@@ -1936,7 +2031,8 @@ crearToggle(pTB, "Ignorar mi equipo", "No dispara a jugadores de tu equipo.", fu
 crearSeccion(pTB, "Ajustes")
 crearSlider(pTB, "Retardo de reacción", 0, 500, trigDelay, 10, function(v) trigDelay = v end, " ms")
 crearSlider(pTB, "Intervalo entre disparos", 50, 1000, trigInterval, 10, function(v) trigInterval = v end, " ms")
-crearNota(pTB, "Usa el método de disparo elegido en Autoshot. Dispara hacia donde apunta el cursor (o el centro en primera persona).", 46)
+crearSelector(pTB, "Método de disparo", "Click usa mouse1click; Activate usa Tool:Activate().", {"Click", "Activate"}, 1, function(_, i) disparoMetodo = i end)
+crearNota(pTB, "Dispara hacia donde apunta el cursor (o el centro en primera persona).", 34)
 
 end
 
@@ -1968,7 +2064,7 @@ feats[#feats + 1] = {texto = "jugadores teletransportar tp observar spectate lis
 
 local Left = new("Frame", {Size = UDim2.new(0.4, 0, 1, 0), BackgroundTransparency = 1, Parent = pJug})
 local PSearch = new("TextBox", {
-    Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 0.15, Text = "", PlaceholderText = "Buscar jugador...",
+    Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 0.4, Text = "", PlaceholderText = "Buscar jugador...",
     Font = Enum.Font.Gotham, TextSize = 12, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left,
     __t = {BackgroundColor3 = "panel", TextColor3 = "texto", PlaceholderColor3 = "sub"}, Parent = Left,
 }, {corner(8), new("UIPadding", {PaddingLeft = UDim.new(0, 14)}), stroke("accent", 1.4, 0.5)})
@@ -1980,7 +2076,7 @@ local List = new("ScrollingFrame", {
 }, {new("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.Name})})
 
 local Right = new("Frame", {
-    Size = UDim2.new(0.6, -10, 1, 0), Position = UDim2.new(0.4, 10, 0, 0), BackgroundTransparency = 0.15,
+    Size = UDim2.new(0.6, -10, 1, 0), Position = UDim2.new(0.4, 10, 0, 0), BackgroundTransparency = 0.35,
     __t = {BackgroundColor3 = "panel"}, Parent = pJug,
 }, {corner(8), stroke("accent", 1, 0.6)})
 
@@ -2017,22 +2113,22 @@ for i, nombre in ipairs(campos) do
 end
 
 local TPBtn = new("TextButton", {
-    Size = UDim2.new(0.5, -15, 0, 34), Position = UDim2.new(0, 10, 1, -44), Text = "Teletransportar",
+    Size = UDim2.new(0.5, -15, 0, 34), Position = UDim2.new(0, 10, 1, -44), Text = "Teletransportar", BackgroundTransparency = 0.7,
     TextColor3 = BLANCO, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false,
     __t = {BackgroundColor3 = "accent"}, Parent = Right,
-}, {corner(8), stroke(BLANCO, 1.2, 0.6)})
+}, {corner(8), stroke("accent", 1.4, 0.1)})
 SpecBtn = new("TextButton", {
-    Size = UDim2.new(0.5, -15, 0, 34), Position = UDim2.new(0.5, 5, 1, -44), Text = "Observar",
+    Size = UDim2.new(0.5, -15, 0, 34), Position = UDim2.new(0.5, 5, 1, -44), Text = "Observar", BackgroundTransparency = 0.7,
     Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false,
     __t = {BackgroundColor3 = "panel2", TextColor3 = "texto"}, Parent = Right,
-}, {corner(8), stroke("accent", 1.2, 0.5)})
+}, {corner(8), stroke("accent", 1.2, 0.4)})
 efecto(TPBtn, TPBtn, {hover = 1.04, sinGlow = true})
 efecto(SpecBtn, SpecBtn, {hover = 1.04, sinGlow = true})
 
 dejarDeObservar = function()
     spectating = false
     SpecBtn.Text = "Observar"
-    tween(SpecBtn, 0.2, {BackgroundColor3 = T.panel2})
+    tween(SpecBtn, 0.2, {BackgroundColor3 = T.panel2, BackgroundTransparency = 0.7})
     local cam = workspace.CurrentCamera
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -2048,7 +2144,7 @@ SpecBtn.MouseButton1Click:Connect(function()
     workspace.CurrentCamera.CameraSubject = hum
     spectating = true
     SpecBtn.Text = "Dejar de observar"
-    tween(SpecBtn, 0.2, {BackgroundColor3 = T.rojo})
+    tween(SpecBtn, 0.2, {BackgroundColor3 = T.rojo, BackgroundTransparency = 0.55})
 end)
 
 TPBtn.MouseButton1Click:Connect(function()
@@ -2071,7 +2167,8 @@ local function seleccionarJugador(p)
     Avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. p.UserId .. "&w=150&h=150"
     for _, b in ipairs(List:GetChildren()) do
         if b:IsA("TextButton") then
-            tween(b, 0.15, {BackgroundColor3 = (b.Name == p.Name) and T.accent or T.panel})
+            local a = (b.Name == p.Name)
+            tween(b, 0.15, {BackgroundColor3 = a and T.accent or T.panel, BackgroundTransparency = a and 0.6 or 0.4})
         end
     end
 end
@@ -2085,9 +2182,10 @@ refrescarLista = function()
         if p ~= LocalPlayer then
             local coincide = filtro == "" or string.find(string.lower(p.Name), filtro, 1, true) or string.find(string.lower(p.DisplayName), filtro, 1, true)
             if coincide then
+                local sel = (selected == p)
                 local b = new("TextButton", {
-                    Name = p.Name, Size = UDim2.new(1, -4, 0, 36), BackgroundColor3 = (selected == p) and T.accent or T.panel,
-                    BackgroundTransparency = 0.15, Text = "", AutoButtonColor = false, Parent = List,
+                    Name = p.Name, Size = UDim2.new(1, -4, 0, 36), BackgroundColor3 = sel and T.accent or T.panel,
+                    BackgroundTransparency = sel and 0.6 or 0.4, Text = "", AutoButtonColor = false, Parent = List,
                 }, {corner(8), stroke("accent", 1.2, 0.55)})
                 new("ImageLabel", {
                     Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(0, 6, 0.5, -13), BackgroundColor3 = T.panel2,
@@ -2195,11 +2293,12 @@ do
     for i, tm in ipairs(Temas) do
         local b = new("TextButton", {
             Size = UDim2.new(0, 78, 0, 28), Position = UDim2.new(0, 14 + (i - 1) * 82, 0, 56), BackgroundColor3 = BLANCO,
-            Text = tm.n, TextColor3 = BLANCO, Font = Enum.Font.GothamBold, TextSize = 11, AutoButtonColor = false,
-            TextStrokeTransparency = 0.5, Parent = card,
+            BackgroundTransparency = 0.55, Text = tm.n, TextColor3 = BLANCO, Font = Enum.Font.GothamBold, TextSize = 11,
+            AutoButtonColor = false, TextStrokeTransparency = 0.5, Parent = card,
         }, {
             corner(8),
             new("UIGradient", {Color = ColorSequence.new(tm.accent, tm.accent2), Rotation = 20}),
+            stroke(tm.accent, 1.2, 0.2),
         })
         efecto(b, b, {hover = 1.06, sinGlow = true})
         b.MouseButton1Click:Connect(function() aplicarPreset(i) end)
@@ -2231,18 +2330,18 @@ crearSeccion(pApa, "Imagen de fondo")
 do
     local card = crearCard(pApa, "Imagen de fondo", "Pega el ID de una imagen de Roblox y pulsa Aplicar.", 94)
     local box = new("TextBox", {
-        Size = UDim2.new(1, -140, 0, 30), Position = UDim2.new(0, 14, 0, 56), BackgroundTransparency = 0.1, Text = "",
+        Size = UDim2.new(1, -140, 0, 30), Position = UDim2.new(0, 14, 0, 56), BackgroundTransparency = 0.5, Text = "",
         PlaceholderText = "ID (solo números)", ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         __t = {BackgroundColor3 = "panel2", TextColor3 = "texto", PlaceholderColor3 = "sub"}, Parent = card,
     }, {corner(8), new("UIPadding", {PaddingLeft = UDim.new(0, 12)}), stroke("accent", 1, 0.6)})
     local ap = new("TextButton", {
-        Size = UDim2.new(0, 108, 0, 30), Position = UDim2.new(1, -122, 0, 56), Text = "Aplicar",
+        Size = UDim2.new(0, 108, 0, 30), Position = UDim2.new(1, -122, 0, 56), Text = "Aplicar", BackgroundTransparency = 0.7,
         Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false,
         __t = {BackgroundColor3 = "accent"}, Parent = card,
-    }, {corner(8)})
+    }, {corner(8), stroke("accent", 1.3, 0.1)})
     ap.TextColor3 = BLANCO
-    efecto(ap, ap, {hover = 1.05})
+    efecto(ap, ap, {hover = 1.05, sinGlow = true})
     ap.MouseButton1Click:Connect(function()
         local txt = (string.gsub(box.Text, "%s", ""))
         if txt == "" then
@@ -2451,7 +2550,7 @@ end
 -- Nombre
 local cNombre = crearCard(pAju, "Nombre de la configuración", "Escribe un nombre y pulsa Guardar.", 94)
 local cfgBox = new("TextBox", {
-    Size = UDim2.new(1, -28, 0, 30), Position = UDim2.new(0, 14, 0, 56), BackgroundTransparency = 0.1, Text = "",
+    Size = UDim2.new(1, -28, 0, 30), Position = UDim2.new(0, 14, 0, 56), BackgroundTransparency = 0.5, Text = "",
     PlaceholderText = "Nombre (ej. Mi config)", ClearTextOnFocus = false, Font = Enum.Font.Gotham, TextSize = 12,
     TextXAlignment = Enum.TextXAlignment.Left,
     __t = {BackgroundColor3 = "panel2", TextColor3 = "texto", PlaceholderColor3 = "sub"}, Parent = cNombre,
@@ -2476,9 +2575,9 @@ refrescarCfg = function()
     for i, n in ipairs(indice) do
         local b = new("TextButton", {
             Size = UDim2.new(1, -4, 0, 26), BackgroundColor3 = (cfgSel == n) and T.accent or T.panel2,
-            BackgroundTransparency = (cfgSel == n) and 0.45 or 0.3, Text = n, TextColor3 = T.texto,
+            BackgroundTransparency = (cfgSel == n) and 0.6 or 0.75, Text = n, TextColor3 = T.texto,
             Font = Enum.Font.GothamMedium, TextSize = 12, AutoButtonColor = false, LayoutOrder = i, Parent = lista,
-        }, {corner(8), stroke("accent", 1, 0.55)})
+        }, {corner(8), stroke("accent", 1, (cfgSel == n) and 0.1 or 0.55)})
         b.MouseButton1Click:Connect(function()
             cfgSel = n
             cfgBox.Text = n
@@ -2497,7 +2596,7 @@ crearAccion(pAju, "Eliminar configuración", "Borra la configuración selecciona
 end)
 
 crearSeccion(pAju, "Acerca de")
-crearNota(pAju, "NAHUALHUB v2.7  •  Premium Edition\nEl botón flotante N abre o cierra el menú. Personaliza colores y tamaño en GENERAL > Apariencia.", 40)
+crearNota(pAju, "NAHUALHUB v2.8  •  Premium Edition\nEl botón flotante N abre o cierra el menú. Personaliza colores y tamaño en GENERAL > Apariencia.", 40)
 
 end
 
@@ -2551,6 +2650,7 @@ conns[#conns + 1] = LocalPlayer.CharacterAdded:Connect(function()
     spectating = false
     SpecBtn.Text = "Observar"
     SpecBtn.BackgroundColor3 = T.panel2
+    SpecBtn.BackgroundTransparency = 0.7
 end)
 
 -- ========== CERRAR ==========
